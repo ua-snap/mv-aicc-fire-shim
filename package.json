@@ -7,6 +7,7 @@
     "test": "./node_modules/.bin/eslint index.js",
     "start": "node index.js"
   },
+  "repository": "http://mv-aicc-fire-shim-mv-aicc-fire-shim.openshift.snap.uaf.edu/",
   "eslintConfig": {
     "extends": "standard",
     "env": {
