@@ -1,0 +1,40 @@
+{
+  "name": "mv-aicc-fire-shim",
+  "version": "1.0.0",
+  "description": "preprocess fire data from AICC",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/.bin/eslint index.js",
+    "start": "supervisor index.js"
+  },
+  "eslintConfig": {
+    "extends": "standard",
+    "env": {
+      "node": true
+    },
+    "plugins": [
+        "standard",
+        "promise"
+    ],
+    "rules": {
+      "semi": ["error", "always"]
+    }
+  },
+  "author": "SNAP",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "3.5.0",
+    "express": "4.15.2",
+    "lodash": "4.17.4",
+    "node-cache": "4.1.1",
+    "request": "2.81.0"
+  },
+  "devDependencies": {
+    "eslint": "3.19.0",
+    "eslint-config-standard": "10.2.1",
+    "eslint-plugin-import": "2.2.0",
+    "eslint-plugin-node": "4.2.2",
+    "eslint-plugin-promise": "3.5.0",
+    "eslint-plugin-standard": "3.0.1"
+  }
+}
