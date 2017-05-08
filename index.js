@@ -16,6 +16,8 @@ app.get('/', function (req, res) {
     // an upstream fetch, it's available as fireGeoJSON
     // in the success handler below
     .then(function (fireGeoJSON) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', '*');
       res.json({
         type: 'FeatureCollection',
         features: fireGeoJSON
