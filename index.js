@@ -139,89 +139,109 @@ function getFireTimeSeries () {
       }
     }
 
-    // Fetch the CSV file.
-    request.getAsync(fireTimeSeriesUrl).spread(function (response, body) {
-      // parsedData stores the data was it was found in the original CSV.
+    function parseData (data) {
       var parsedData = {};
 
-      var parser = parse(body, {delimiter: ','}, function (err, data) {
-        data.forEach(function (line) {
-          var year = line[1];
-          var month = line[2];
-          var day = line[3];
-          var acres = line[6];
+      data.forEach(function (line) {
+        var year = line[1];
+        var month = line[2];
+        var day = line[3];
+        var acres = line[6];
 
-          setAcres(parsedData, year, month, day, acres);
-        });
+        setAcres(parsedData, year, month, day, acres);
       });
 
-      // fixedData stores the data with data gaps filled and cumulative totals
-      // strictly enforced by never decreasing throughout a year.
+      return parsedData;
+    };
+
+    function fixData (data) {
       var fixedData = {};
 
-      parser.on('end', function () {
-        for (var year in parsedData) {
-          if (parsedData.hasOwnProperty(year)) {
-            underscore.range(startDay, endDay).forEach(function (dayOfYear) {
-              var month = moment().dayOfYear(dayOfYear).month() + 1;
-              var day = moment().dayOfYear(dayOfYear).date();
+      for (var year in data) {
+        if (data.hasOwnProperty(year)) {
+          underscore.range(startDay, endDay).forEach(function (dayOfYear) {
+            var month = moment().dayOfYear(dayOfYear).month() + 1;
+            var day = moment().dayOfYear(dayOfYear).date();
 
-              // Do not attempt to process future days.
-              if (year !== currentYear || dayOfYear <= moment().dayOfYear()) {
-                if (dayOfYear === startDay) {
-                  // Set first day to zero if no value was provided in the CSV.
-                  // Otherwise, use the value that was parsed from the CSV.
-                  if (parsedData[year][month] === undefined || parsedData[year][month][day] == undefined) {
-                    setAcres(fixedData, year, month, day, 0);
-                  } else {
-                    setAcres(fixedData, year, month, day, parsedData[year][month][day]);
-                  }
+            // Do not attempt to process future days.
+            if (year !== currentYear || dayOfYear <= moment().dayOfYear()) {
+              if (dayOfYear === startDay) {
+                // Set first day to zero if no value was provided in the CSV.
+                // Otherwise, use the value that was parsed from the CSV.
+                if (data[year][month] === undefined || data[year][month][day] == undefined) {
+                  setAcres(fixedData, year, month, day, 0);
                 } else {
-                  // Yesterday is the day prior to the day currently being processed.
-                  var yesterday = moment().dayOfYear(dayOfYear - 1).date();
-                  var yesterdayMonth = moment().dayOfYear(dayOfYear - 1).month() + 1;
+                  setAcres(fixedData, year, month, day, data[year][month][day]);
+                }
+              } else {
+                // Yesterday is the day prior to the day currently being processed.
+                var yesterday = moment().dayOfYear(dayOfYear - 1).date();
+                var yesterdayMonth = moment().dayOfYear(dayOfYear - 1).month() + 1;
 
-                  if(parsedData[year][month] === undefined || parsedData[year][month][day] == undefined) {
-                    // If the current day has no value, use the value from the previous day.
-                    setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
-                  } else if (parseFloat(parsedData[year][month][day]) < parseFloat(fixedData[year][yesterdayMonth][yesterday])) {
-                    // If the day before has a value greater than the current day, use the value
-                    // from the day before to enforce strict cumulative totals.
-                    setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
-                  } else {
-                    // If there are no issues, simply use the value from the CSV.
-                    setAcres(fixedData, year, month, day, parsedData[year][month][day]);
-                  }
+                if(data[year][month] === undefined || data[year][month][day] == undefined) {
+                  // If the current day has no value, use the value from the previous day.
+                  setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
+                } else if (parseFloat(data[year][month][day]) < parseFloat(fixedData[year][yesterdayMonth][yesterday])) {
+                  // If the day before has a value greater than the current day, use the value
+                  // from the day before to enforce strict cumulative totals.
+                  setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
+                } else {
+                  // If there are no issues, simply use the value from the CSV.
+                  setAcres(fixedData, year, month, day, data[year][month][day]);
                 }
               }
-            });
-          }
+            }
+          });
         }
+      }
 
-        // outputData stores only the years that will be output to the endpoint,
-        // with the dates and acres stored in separate arrays to make the data
-        // ready for use in Plotly.
-        var outputData = {};
+      return fixedData;
+    };
 
-        for (var year in fixedData) {
-          if (fixedData.hasOwnProperty(year)) {
-            if (underscore.contains(outputYears, year)) {
-              outputData[year] = {};
-              outputData[year].dates = [];
-              outputData[year].acres = [];
+    function formatData (data) {
+      var formattedData = {};
 
-              for (var month in fixedData[year]) {
-                for (var day in fixedData[year][month]) {
-                  var dateLabel = moment.months(month - 1) + ' ' + day;
-                  outputData[year].dates.push(dateLabel);
-                  outputData[year].acres.push(fixedData[year][month][day]);
-                }
+      for (var year in data) {
+        if (data.hasOwnProperty(year)) {
+          if (underscore.contains(outputYears, year)) {
+            formattedData[year] = {};
+            formattedData[year].dates = [];
+            formattedData[year].acres = [];
+
+            for (var month in data[year]) {
+              for (var day in data[year][month]) {
+                var dateLabel = moment.months(month - 1) + ' ' + day;
+                formattedData[year].dates.push(dateLabel);
+                formattedData[year].acres.push(data[year][month][day]);
               }
             }
           }
         }
+      }
 
-        resolve(outputData);
+      return formattedData;
+    };
+
+    // Fetch the CSV file.
+    request.getAsync(fireTimeSeriesUrl).spread(function (response, body) {
+      // parsedData stores the data was it was found in the original CSV.
+      var parsedData;
+
+      var parser = parse(body, {delimiter: ','}, function (err, data) {
+        parsedData = parseData(data);
+      });
+
+      parser.on('end', function () {
+        // fixedData stores the data with data gaps filled and cumulative totals
+        // strictly enforced by never decreasing throughout a year.
+        var fixedData = fixData(parsedData);
+
+        // formattedData stores only the years that will be output to the endpoint,
+        // with the dates and acres stored in separate arrays to make the data
+        // ready for use in Plotly.
+        var formattedData = formatData(fixedData);
+
+        resolve(formattedData);
       });
     });
   });
