@@ -111,139 +111,160 @@ function getFireGeoJSON () {
 
 function getFireTimeSeries () {
   return new Promise(function (resolve, reject) {
-    // The top five acres burned years that we know in advance.
-    var topYears = ['2004', '2015', '2005', '2009', '2013'];
+    // Try cache...
+    var fireTimeSeries = cache.get('fireTimeSeries');
 
-    var startDay = 121; // May 1
-    var endDay = 274;   // September 30
+    if (undefined === fireTimeSeries) {
+      // Cache miss.
+      console.info('Attempting to update cache from upstream data...');
 
-    // This endpoint will output the top years + current year.
-    var currentYear = moment().format('YYYY');
-    var outputYears = topYears.concat(currentYear);
+      // The top five acres burned years that we know in advance.
+      var topYears = ['2004', '2015', '2005', '2009', '2013'];
 
-    // Utility function to help build year/month/day tree, which is used later
-    // on to fill in gaps and smooth out cumulative totals that go backwards.
-    function setAcres(obj, year, month, day, acres) {
-      if (year !== 'FireSeason') {
-        if (obj[year] === undefined) {
-          obj[year] = {};
-        }
+      var startDay = 121; // May 1
+      var endDay = 274;   // September 30
 
-        if (obj[year][month] === undefined) {
-          obj[year][month] = {};
-        }
+      // This endpoint will output the top years + current year.
+      var currentYear = moment().format('YYYY');
+      var outputYears = topYears.concat(currentYear);
 
-        if (obj[year][month][day] === undefined) {
-          obj[year][month][day] = acres;
-        }
-      }
-    }
+      // Utility function to help build year/month/day tree, which is used later
+      // on to fill in gaps and smooth out cumulative totals that go backwards.
+      function setAcres(obj, year, month, day, acres) {
+        if (year !== 'FireSeason') {
+          if (obj[year] === undefined) {
+            obj[year] = {};
+          }
 
-    function parseData (data) {
-      var parsedData = {};
+          if (obj[year][month] === undefined) {
+            obj[year][month] = {};
+          }
 
-      data.forEach(function (line) {
-        var year = line[1];
-        var month = line[2];
-        var day = line[3];
-        var acres = line[6];
-
-        setAcres(parsedData, year, month, day, acres);
-      });
-
-      return parsedData;
-    };
-
-    function fixData (data) {
-      var fixedData = {};
-
-      for (var year in data) {
-        if (data.hasOwnProperty(year)) {
-          underscore.range(startDay, endDay).forEach(function (dayOfYear) {
-            var month = moment().dayOfYear(dayOfYear).month() + 1;
-            var day = moment().dayOfYear(dayOfYear).date();
-
-            // Do not attempt to process future days.
-            if (year !== currentYear || dayOfYear <= moment().dayOfYear()) {
-              if (dayOfYear === startDay) {
-                // Set first day to zero if no value was provided in the CSV.
-                // Otherwise, use the value that was parsed from the CSV.
-                if (data[year][month] === undefined || data[year][month][day] == undefined) {
-                  setAcres(fixedData, year, month, day, 0);
-                } else {
-                  setAcres(fixedData, year, month, day, data[year][month][day]);
-                }
-              } else {
-                // Yesterday is the day prior to the day currently being processed.
-                var yesterday = moment().dayOfYear(dayOfYear - 1).date();
-                var yesterdayMonth = moment().dayOfYear(dayOfYear - 1).month() + 1;
-
-                if(data[year][month] === undefined || data[year][month][day] == undefined) {
-                  // If the current day has no value, use the value from the previous day.
-                  setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
-                } else if (parseFloat(data[year][month][day]) < parseFloat(fixedData[year][yesterdayMonth][yesterday])) {
-                  // If the day before has a value greater than the current day, use the value
-                  // from the day before to enforce strict cumulative totals.
-                  setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
-                } else {
-                  // If there are no issues, simply use the value from the CSV.
-                  setAcres(fixedData, year, month, day, data[year][month][day]);
-                }
-              }
-            }
-          });
-        }
-      }
-
-      return fixedData;
-    };
-
-    function formatData (data) {
-      var formattedData = {};
-
-      for (var year in data) {
-        if (data.hasOwnProperty(year)) {
-          if (underscore.contains(outputYears, year)) {
-            formattedData[year] = {};
-            formattedData[year].dates = [];
-            formattedData[year].acres = [];
-
-            for (var month in data[year]) {
-              for (var day in data[year][month]) {
-                var dateLabel = moment.months(month - 1) + ' ' + day;
-                formattedData[year].dates.push(dateLabel);
-                formattedData[year].acres.push(data[year][month][day]);
-              }
-            }
+          if (obj[year][month][day] === undefined) {
+            obj[year][month][day] = acres;
           }
         }
       }
 
-      return formattedData;
-    };
+      function parseData (data) {
+        var parsedData = {};
 
-    // Fetch the CSV file.
-    request.getAsync(fireTimeSeriesUrl).spread(function (response, body) {
-      // parsedData stores the data was it was found in the original CSV.
-      var parsedData;
+        data.forEach(function (line) {
+          var year = line[1];
+          var month = line[2];
+          var day = line[3];
+          var acres = line[6];
 
-      var parser = parse(body, {delimiter: ','}, function (err, data) {
-        parsedData = parseData(data);
+          setAcres(parsedData, year, month, day, acres);
+        });
+
+        return parsedData;
+      };
+
+      function fixData (data) {
+        var fixedData = {};
+
+        for (var year in data) {
+          if (data.hasOwnProperty(year)) {
+            underscore.range(startDay, endDay).forEach(function (dayOfYear) {
+              var month = moment().dayOfYear(dayOfYear).month() + 1;
+              var day = moment().dayOfYear(dayOfYear).date();
+
+              // Do not attempt to process future days.
+              if (year !== currentYear || dayOfYear <= moment().dayOfYear()) {
+                if (dayOfYear === startDay) {
+                  // Set first day to zero if no value was provided in the CSV.
+                  // Otherwise, use the value that was parsed from the CSV.
+                  if (data[year][month] === undefined || data[year][month][day] == undefined) {
+                    setAcres(fixedData, year, month, day, 0);
+                  } else {
+                    setAcres(fixedData, year, month, day, data[year][month][day]);
+                  }
+                } else {
+                  // Yesterday is the day prior to the day currently being processed.
+                  var yesterday = moment().dayOfYear(dayOfYear - 1).date();
+                  var yesterdayMonth = moment().dayOfYear(dayOfYear - 1).month() + 1;
+
+                  if(data[year][month] === undefined || data[year][month][day] == undefined) {
+                    // If the current day has no value, use the value from the previous day.
+                    setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
+                  } else if (parseFloat(data[year][month][day]) < parseFloat(fixedData[year][yesterdayMonth][yesterday])) {
+                    // If the day before has a value greater than the current day, use the value
+                    // from the day before to enforce strict cumulative totals.
+                    setAcres(fixedData, year, month, day, fixedData[year][yesterdayMonth][yesterday]);
+                  } else {
+                    // If there are no issues, simply use the value from the CSV.
+                    setAcres(fixedData, year, month, day, data[year][month][day]);
+                  }
+                }
+              }
+            });
+          }
+        }
+
+        return fixedData;
+      };
+
+      function formatData (data) {
+        var formattedData = {};
+
+        for (var year in data) {
+          if (data.hasOwnProperty(year)) {
+            if (underscore.contains(outputYears, year)) {
+              formattedData[year] = {};
+              formattedData[year].dates = [];
+              formattedData[year].acres = [];
+
+              for (var month in data[year]) {
+                for (var day in data[year][month]) {
+                  var dateLabel = moment.months(month - 1) + ' ' + day;
+                  formattedData[year].dates.push(dateLabel);
+                  formattedData[year].acres.push(data[year][month][day]);
+                }
+              }
+            }
+          }
+        }
+
+        return formattedData;
+      };
+
+      // Fetch the CSV file.
+      request.getAsync(fireTimeSeriesUrl).spread(function (response, body) {
+        // parsedData stores the data was it was found in the original CSV.
+        var parsedData;
+
+        if (response.statusCode === 200) {
+          try {
+            var parser = parse(body, {delimiter: ','}, function (err, data) {
+              parsedData = parseData(data);
+            });
+          } catch (err) {
+            reject(new Error('Could not parse upstream CSV'));
+          }
+        } else {
+          reject(new Error('Upstream service status code: ' + response.statusCode));
+        }
+
+        parser.on('end', function () {
+          // fixedData stores the data with data gaps filled and cumulative totals
+          // strictly enforced by never decreasing throughout a year.
+          var fixedData = fixData(parsedData);
+
+          // fireTimeSeries stores only the years that will be output to the
+          // endpoint, with the dates and acres stored in separate arrays to
+          // make the data ready for use in Plotly.
+          fireTimeSeries = formatData(fixedData);
+          cache.set('fireTimeSeries', fireTimeSeries);
+          resolve(fireTimeSeries);
+        });
+      }).catch(function(err) {
+        reject('Could not fetch or process upstream data.');
       });
-
-      parser.on('end', function () {
-        // fixedData stores the data with data gaps filled and cumulative totals
-        // strictly enforced by never decreasing throughout a year.
-        var fixedData = fixData(parsedData);
-
-        // formattedData stores only the years that will be output to the endpoint,
-        // with the dates and acres stored in separate arrays to make the data
-        // ready for use in Plotly.
-        var formattedData = formatData(fixedData);
-
-        resolve(formattedData);
-      });
-    });
+    } else {
+      // Cache hit, serve data immediately.
+      resolve(fireTimeSeries);
+    }
   });
 };
 
