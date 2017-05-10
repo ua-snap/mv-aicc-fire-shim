@@ -2,7 +2,6 @@ var express = require('express');
 var Promise = require('bluebird');
 var parse = require('csv-parse');
 var moment = require('moment');
-var underscore = require('underscore');
 
 var request = Promise.promisifyAll(require('request'), {multiArgs: true});
 var _ = require('lodash');
@@ -16,14 +15,19 @@ var allFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureSer
 
 var fireTimeSeriesUrl = 'https://fire.ak.blm.gov/content/aicc/Statistics%20Directory/Alaska%20Daily%20Stats%20-%202004%20to%20Present.csv';
 
+// Used to set common headers for all responses
+function setCommonHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', '*');
+}
+
 app.get('/', function (req, res) {
   getFireGeoJSON()
     // After fetching the merged data from cache or
     // an upstream fetch, it's available as fireGeoJSON
     // in the success handler below
     .then(function (fireGeoJSON) {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', '*');
+      setCommonHeaders(res);
       res.json({
         type: 'FeatureCollection',
         features: fireGeoJSON
@@ -43,12 +47,8 @@ app.get('/fire-time-series', function (req, res) {
     // an upstream fetch, it's available as fireGeoJSON
     // in the success handler below
     .then(function (fireTimeSeries) {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', '*');
-      res.json({
-        type: 'FeatureCollection',
-        features: fireTimeSeries
-      });
+      setCommonHeaders(res);
+      res.json(fireTimeSeries);
     })
     // Something failed upstream and the cache is stale,
     // return empty 500.
@@ -116,7 +116,7 @@ function getFireTimeSeries () {
 
     if (undefined === fireTimeSeries) {
       // Cache miss.
-      console.info('Attempting to update cache from upstream data...');
+      console.info('Attempting to update fire timeseries cache from upstream CSV...');
 
       // The top five acres burned years that we know in advance.
       var topYears = ['2004', '2015', '2005', '2009', '2013'];
@@ -166,7 +166,7 @@ function getFireTimeSeries () {
 
         for (var year in data) {
           if (data.hasOwnProperty(year)) {
-            underscore.range(startDay, endDay).forEach(function (dayOfYear) {
+            _.range(startDay, endDay).forEach(function (dayOfYear) {
               var month = moment().dayOfYear(dayOfYear).month() + 1;
               var day = moment().dayOfYear(dayOfYear).date();
 
@@ -210,7 +210,7 @@ function getFireTimeSeries () {
 
         for (var year in data) {
           if (data.hasOwnProperty(year)) {
-            if (underscore.contains(outputYears, year)) {
+            if (_.includes(outputYears, year)) {
               formattedData[year] = {};
               formattedData[year].dates = [];
               formattedData[year].acres = [];
