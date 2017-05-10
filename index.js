@@ -167,9 +167,7 @@ function getFireTimeSeries () {
               var day = moment().dayOfYear(dayOfYear).date();
 
               // Do not attempt to process future days.
-              var validDay = year !== currentYear || dayOfYear <= moment().dayOfYear();
-
-              if (validDay) {
+              if (year !== currentYear || dayOfYear <= moment().dayOfYear()) {
                 if (dayOfYear === startDay) {
                   // Set first day to zero if no value was provided in the CSV.
                   // Otherwise, use the value that was parsed from the CSV.
