@@ -118,8 +118,8 @@ function getFireTimeSeries () {
       // Cache miss.
       console.info('Attempting to update fire timeseries cache from upstream CSV...');
 
-      // The top five acres burned years that we know in advance.
-      var topYears = ['2004', '2015', '2005', '2009', '2013'];
+      // These are all the years with 1+ million acres burned since 2004.
+      var topYears = ['2004', '2015', '2005', '2009', '2010', '2013'];
 
       var startDay = 121; // May 1
       var endDay = 274;   // September 30
