@@ -283,18 +283,26 @@ app.listen(serverPort, serverIpAddress, function () {
 // Merge information from the two API endpoints into an array of GeoJSON Features.
 function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimeters, inactiveFires) {
 
+  var parseAcres = function(a) {
+    return parseFloat(a).toFixed(2);
+  }
+
   // Start by adding a few fields to each batch
   _.each(activeFirePerimeters.features, function (feature, index, list) {
-    list[index].active = true;
+    list[index].properties.active = true;
+    list[index].properties.acres = parseAcres(feature.properties.ACRES);
   });
   _.each(inactiveFirePerimeters.features, function (feature, index, list) {
-    list[index].active = false;
+    list[index].properties.active = false;
+    list[index].properties.acres = parseAcres(feature.properties.ACRES);
   });
   _.each(activeFires.features, function (feature, index, list) {
-    list[index].active = true;
+    list[index].properties.active = true;
+    list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
   });
   _.each(inactiveFires.features, function (feature, index, list) {
-    list[index].active = false;
+    list[index].properties.active = false;
+    list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
   });
 
   // Create a temporary data structure that is indexed in a useful way
