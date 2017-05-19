@@ -283,26 +283,36 @@ app.listen(serverPort, serverIpAddress, function () {
 // Merge information from the two API endpoints into an array of GeoJSON Features.
 function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimeters, inactiveFires) {
 
+  // Function that formats the size of the fire into the desired format
   var parseAcres = function(a) {
     return parseFloat(a).toFixed(2);
+  }
+
+  // Function that formats the update time into the desired foramt
+  var parseUpdatedTime = function(t) {
+    return moment.utc(moment.unix(t / 1000)).format('MMMM D, h:mm a')
   }
 
   // Start by adding a few fields to each batch
   _.each(activeFirePerimeters.features, function (feature, index, list) {
     list[index].properties.active = true;
     list[index].properties.acres = parseAcres(feature.properties.ACRES);
+    list[index].properties.updated = parseUpdatedTime(feature.properties.UPDATETIME);
   });
   _.each(inactiveFirePerimeters.features, function (feature, index, list) {
     list[index].properties.active = false;
     list[index].properties.acres = parseAcres(feature.properties.ACRES);
+    list[index].properties.updated = parseUpdatedTime(feature.properties.UPDATETIME);
   });
   _.each(activeFires.features, function (feature, index, list) {
     list[index].properties.active = true;
     list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
+    list[index].properties.updated = parseUpdatedTime(feature.properties.LASTUPDATETIME);
   });
   _.each(inactiveFires.features, function (feature, index, list) {
     list[index].properties.active = false;
     list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
+    list[index].properties.updated = parseUpdatedTime(feature.properties.LASTUPDATETIME);
   });
 
   // Create a temporary data structure that is indexed in a useful way
