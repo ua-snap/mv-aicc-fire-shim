@@ -2,6 +2,7 @@ var express = require('express');
 var Promise = require('bluebird');
 var parse = require('csv-parse');
 var moment = require('moment');
+
 var winston = require('winston');
 
 var logger = new (winston.Logger)({
@@ -19,10 +20,14 @@ var logger = new (winston.Logger)({
   ]
 });
 
+const fs = require('fs');
+
 var request = Promise.promisifyAll(require('request'), {multiArgs: true});
 var _ = require('lodash');
 const NodeCache = require('node-cache');
 const cache = new NodeCache({ stdTTL: 3600, checkperiod: 3600 });
+
+const fireFileCacheName = 'fires.geojson';
 
 var app = express();
 
@@ -50,14 +55,30 @@ app.get('/', function (req, res) {
       setCommonHeaders(res);
       res.json({
         type: 'FeatureCollection',
-        features: fireGeoJSON
+        features: fireGeoJSON,
+        source: 'memory cache'
       });
     })
     // Something failed upstream and the cache is stale,
     // return empty 500.
     .catch(function (err) {
-      logger.error(err);
-      res.status(500).send();
+      // If we can, send the last updated cache
+      if(fs.statSync(fireFileCacheName).isFile()) {
+        var fireData = fs.readFileSync(fireFileCacheName);
+
+        // Repopulate cache
+        cache.set('fireGeoJSON', JSON.parse(fireData));
+
+        res.json({
+          type: 'FeatureCollection',
+          features: JSON.parse(fireData),
+          source: 'disk cache'
+        });
+      } else {
+        logger.error('Tried to serve file cache but no file present, giving up')
+        logger.error(err);
+        res.status(500).send();
+      }
     });
 });
 
@@ -117,6 +138,7 @@ function getFireGeoJSON () {
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
           fireGeoJSON = processGeoJSON(results[0][0], results[1][0], results[2][0], results[3][0]);
+          writePersistentCache(fireGeoJSON);
           cache.set('fireGeoJSON', fireGeoJSON);
           resolve(fireGeoJSON);
         }
@@ -128,6 +150,12 @@ function getFireGeoJSON () {
     }
   });
 };
+
+// Write the Fire points/perims to a disk cache,
+// which will be the last resort if the upstream isn't available.
+var writePersistentCache = function (fireGeoJSON) {
+  fs.writeFileSync(fireFileCacheName, JSON.stringify(fireGeoJSON));
+}
 
 function getFireTimeSeries () {
   return new Promise(function (resolve, reject) {
