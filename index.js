@@ -2,6 +2,22 @@ var express = require('express');
 var Promise = require('bluebird');
 var parse = require('csv-parse');
 var moment = require('moment');
+var winston = require('winston');
+
+var logger = new (winston.Logger)({
+  transports: [
+    new (winston.transports.Console)({
+      timestamp: function() {
+        return moment().format();
+      },
+      formatter: function(options) {
+        // Return string will be passed to logger.
+        return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (options.message ? options.message : '') +
+          (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
+      }
+    })
+  ]
+});
 
 var request = Promise.promisifyAll(require('request'), {multiArgs: true});
 var _ = require('lodash');
@@ -40,7 +56,7 @@ app.get('/', function (req, res) {
     // Something failed upstream and the cache is stale,
     // return empty 500.
     .catch(function (err) {
-      console.log(err);
+      logger.error(err);
       res.status(500).send();
     });
 });
@@ -57,7 +73,7 @@ app.get('/fire-time-series', function (req, res) {
     // Something failed upstream and the cache is stale,
     // return empty 500.
     .catch(function (err) {
-      console.log(err);
+      logger.error(err);
       res.status(500).send();
     });
 });
@@ -72,7 +88,7 @@ function getFireGeoJSON () {
 
     if (undefined === fireGeoJSON) {
       // Cache miss.
-      console.info('Attempting to update cache from upstream data...');
+      logger.info('Attempting to update cache from upstream data...');
 
       // Grab both API requests asynchronously
       var urlList = [activeFirePerimetersUrl, activeFiresUrl, inactiveFirePerimetersUrl, inactiveFiresUrl];
@@ -96,7 +112,7 @@ function getFireGeoJSON () {
       }).then(function (results) {
 
           if(undefined !== results[0] && undefined !== results[1]) {
-          console.log('Upstream data fetched OK, processing and updating cache...');
+          logger.info('Upstream data fetched OK, processing and updating cache...');
 
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
@@ -120,7 +136,7 @@ function getFireTimeSeries () {
 
     if (undefined === fireTimeSeries) {
       // Cache miss.
-      console.info('Attempting to update fire timeseries cache from upstream CSV...');
+      logger.info('Attempting to update fire timeseries cache from upstream CSV...');
 
       // These are all the years with 1+ million acres burned since 2004.
       var topYears = ['2004', '2015', '2005', '2009', '2010', '2013'];
@@ -277,7 +293,7 @@ var serverPort = process.env.OPENSHIFT_NODEJS_PORT || 3000;
 var serverIpAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
 
 app.listen(serverPort, serverIpAddress, function () {
-  console.log('Server running on', serverIpAddress, ':', serverPort);
+  logger.info('Server running on', serverIpAddress, ':', serverPort);
 });
 
 // Merge information from the two API endpoints into an array of GeoJSON Features.
