@@ -32,7 +32,8 @@ const memoryCacheTimeout = 3600;
 // How long should we wait for the upstream service to respond before serving from cache?
 const fetchUpstreamDataTimeout = 10000;
 
-// testing -- always try and fetch from upstream
+// Generate cache variable that lasts for an hour before being refreshed from
+// remote site or cache file. 
 const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCacheTimeout });
 
 const fireFileCacheName = 'fires.geojson';
