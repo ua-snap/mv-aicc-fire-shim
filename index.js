@@ -25,7 +25,15 @@ const fs = require('fs');
 var request = Promise.promisifyAll(require('request'), {multiArgs: true});
 var _ = require('lodash');
 const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 3600, checkperiod: 3600 });
+
+// How long should we retain an in-memory cache of the data (seconds)?
+const memoryCacheTimeout = 3600;
+
+// How long should we wait for the upstream service to respond before serving from cache?
+const fetchUpstreamDataTimeout = 10000;
+
+// testing -- always try and fetch from upstream
+const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCacheTimeout });
 
 const fireFileCacheName = 'fires.geojson';
 
@@ -33,10 +41,8 @@ var app = express();
 
 var activeFirePerimetersUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+NAME%2C+ACRES%2C+PERIMETERDATE%2C+LATESTPERIMETER%2C+COMMENTS%2C+FIREID%2C+FIREYEAR%2C+UPDATETIME%2C+FPMERGEDDATE%2C+IRWINID&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=4326gdbVersion=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&f=geojson';
 var activeFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2C+ID%2C+NAME%2C+LASTUPDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+DISCOVERYDATETIME%2C+IADATETIME%2C+IASIZE%2C+CONTROLDATETIME%2C+OUTDATE%2C+ESTIMATEDTOTALACRES%2C+ACTUALTOTALACRES%2C+GENERALCAUSE%2C+SPECIFICCAUSE%2C+STRUCTURESTHREATENED%2C+STRUCTURESBURNED%2C+PRIMARYFUELTYPE%2C+FALSEALARM%2C+FORCESITRPT%2C+FORCESITRPTSTATUS%2C+RECORDNUMBER%2C+COMPLEX%2C+ISCOMPLEX%2C+IRWINID%2C+CONTAINMENTDATETIME%2C+CONFLICTIRWINID%2C+COMPLEXPARENTIRWINID%2C+MERGEDINTO%2C+MERGEDDATE%2C+ISVALID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=4326&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&returnDistinctValues=false&resultOffset=&resultRecordCount=&f=geojson';
-
 var inactiveFirePerimetersUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/FeatureServer/1/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+NAME%2C+ACRES%2C+PERIMETERDATE%2C+LATESTPERIMETER%2C+COMMENTS%2C+FIREID%2C+FIREYEAR%2C+UPDATETIME%2C+FPMERGEDDATE%2C+IRWINID&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=4326gdbVersion=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&f=geojson';
 var inactiveFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2C+ID%2C+NAME%2C+LASTUPDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+DISCOVERYDATETIME%2C+IADATETIME%2C+IASIZE%2C+CONTROLDATETIME%2C+OUTDATE%2C+ESTIMATEDTOTALACRES%2C+ACTUALTOTALACRES%2C+GENERALCAUSE%2C+SPECIFICCAUSE%2C+STRUCTURESTHREATENED%2C+STRUCTURESBURNED%2C+PRIMARYFUELTYPE%2C+FALSEALARM%2C+FORCESITRPT%2C+FORCESITRPTSTATUS%2C+RECORDNUMBER%2C+COMPLEX%2C+ISCOMPLEX%2C+IRWINID%2C+CONTAINMENTDATETIME%2C+CONFLICTIRWINID%2C+COMPLEXPARENTIRWINID%2C+MERGEDINTO%2C+MERGEDDATE%2C+ISVALID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=4326&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&returnDistinctValues=false&resultOffset=&resultRecordCount=&f=geojson';
-
 
 var fireTimeSeriesUrl = 'https://fire.ak.blm.gov/content/aicc/Statistics%20Directory/Alaska%20Daily%20Stats%20-%202004%20to%20Present.csv';
 
@@ -62,10 +68,11 @@ app.get('/', function (req, res) {
     // Something failed upstream and the cache is stale,
     // return empty 500.
     .catch(function (err) {
+      logger.warn('Trying to serve from file cache, upstream not working?', err)
       // If we can, send the last updated cache
       if(fs.statSync(fireFileCacheName).isFile()) {
         var fireData = fs.readFileSync(fireFileCacheName);
-
+        logger.info('Served via file cache, regenerating memory from file')
         // Repopulate cache
         cache.set('fireGeoJSON', JSON.parse(fireData));
 
@@ -114,7 +121,7 @@ function getFireGeoJSON () {
       // Grab both API requests asynchronously
       var urlList = [activeFirePerimetersUrl, activeFiresUrl, inactiveFirePerimetersUrl, inactiveFiresUrl];
       Promise.map(urlList, function (url) {
-        return request.getAsync(url).spread(function (response, body) {
+        return request.getAsync(url).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
           if (response.statusCode === 200) {
             try {
               return [JSON.parse(body), url];
@@ -122,13 +129,16 @@ function getFireGeoJSON () {
               reject(new Error('Could not parse upstream JSON'));
             }
           } else {
+            logger.error('Got something other than HTTP 200', response)
             reject(new Error('Upstream service status code: ' + response.statusCode));
           }
         })
         .catch(function(err) {
-          reject('Could not fetch or process upstream data.');
+          logger.error('Failed inside `request.getAsync(url).timeout().spread()` code segment');
+          reject(err);
         });
       }).catch(function (err) {
+        logger.error('Failed inside `Promise.map()` code segment');
         reject(err);
       }).then(function (results) {
 
@@ -142,6 +152,9 @@ function getFireGeoJSON () {
           cache.set('fireGeoJSON', fireGeoJSON);
           resolve(fireGeoJSON);
         }
+      }).catch(function(err) {
+        logger.error('Could not parse GeoJSON from upstream server');
+        reject(err)
       });
 
     } else {
@@ -391,6 +404,5 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
       mergedFeatures.push(feature);
     }
   });
-
   return mergedFeatures;
 }
