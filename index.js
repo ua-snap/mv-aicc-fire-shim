@@ -356,21 +356,25 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
     list[index].properties.active = true;
     list[index].properties.acres = parseAcres(feature.properties.ACRES);
     list[index].properties.updated = parseUpdatedTime(feature.properties.UPDATETIME);
+    list[index].properties.discovered = parseUpdatedTime(feature.properties.DISCOVERYDATETIME);
   });
   _.each(inactiveFirePerimeters.features, function (feature, index, list) {
     list[index].properties.active = false;
     list[index].properties.acres = parseAcres(feature.properties.ACRES);
     list[index].properties.updated = parseUpdatedTime(feature.properties.UPDATETIME);
+    list[index].properties.discovered = parseUpdatedTime(feature.properties.DISCOVERYDATETIME);
   });
   _.each(activeFires.features, function (feature, index, list) {
     list[index].properties.active = true;
     list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
     list[index].properties.updated = parseUpdatedTime(feature.properties.LASTUPDATETIME);
+    list[index].properties.discovered = parseUpdatedTime(feature.properties.DISCOVERYDATETIME);
   });
   _.each(inactiveFires.features, function (feature, index, list) {
     list[index].properties.active = false;
     list[index].properties.acres = parseAcres(feature.properties.ESTIMATEDTOTALACRES);
     list[index].properties.updated = parseUpdatedTime(feature.properties.LASTUPDATETIME);
+    list[index].properties.discovered = parseUpdatedTime(feature.properties.DISCOVERYDATETIME);
   });
 
   // Create a temporary data structure that is indexed in a useful way
