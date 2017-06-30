@@ -331,11 +331,10 @@ function getFireTimeSeries () {
 };
 
 // Set up server variables and launch node HTTP server
-var serverPort = process.env.OPENSHIFT_NODEJS_PORT || 3000;
-var serverIpAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
+var serverPort = process.env.OPENSHIFT_NODEJS_PORT || process.env.PORT || 3000;
 
-app.listen(serverPort, serverIpAddress, function () {
-  logger.info('Server running on', serverIpAddress, ':', serverPort);
+app.listen(serverPort, function () {
+  logger.info('Server running on', ':', serverPort);
 });
 
 // Merge information from the two API endpoints into an array of GeoJSON Features.
