@@ -496,7 +496,7 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
 // to lightning strikes
 function processLightningGeoJSON (lightningStrikes) {
 
-  // Function that formats the update time into the desired foramt
+  // Function that formats the amplitude in the right way
   var parseLightningAmplitude = function(amp) {
     if (amp < 0) {
       return "NEGATIVE";
