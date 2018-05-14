@@ -48,7 +48,11 @@ var inactiveFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatu
 
 var fireTimeSeriesUrl = 'https://fire.ak.blm.gov/content/aicc/Statistics%20Directory/Alaska%20Daily%20Stats%20-%202004%20to%20Present.csv';
 
-var twoWeeksLightningUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/4/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson&__ncforminfo=GNx-dLA3INiVX08oQZj3Jjeu0iXL8KtJWrcnKAW5BmZDkdgxysfgDNk1nO_BVz366R5awRPWivNSk2SMDb5r0aqPnWcnhR6HDJwmOVqWrQt6R1yN1hAovOPUr2kqr2fCc2xnlU0e846uQeI6W-2GniRLP6N4rM6L_XuKOiBBuaKZIBnSKhcSHIJIR-hElDQk2g6b1xkLviKC4mwCQWfGfrLVIaMFvKhsZL3nNdrl4OK-4s_9UTIbGXJBCG7kay-eJuh_bEiqgmAbTmI-WEP_zZThLZZiu6csK7eUPUEK39fQi3NB7yLNvFOIKxKsMq9Yi7waAfy3o7aWulrWpZ6xBpcjJOBbAXqMON7qsu_w7ZFZwg8_AecvPIR9yLlAVM4GrBk2rs-YpEwxkpuHUFNh3fFI36E7rAZLlzFF33ynzgWDHMocME6XVKWdPrENmEiAtbDjc22h-78jZZDOlS2UwWzfv9YQUpLNKefkjazn3s46hO4s1l-Mc_orP3Vg9VBQORyYwZzMkQdTSfRe9LvQuNwyWv-It0iAVPxyk3YQTceizTRY5_z4OGll50ApbgsLqKvbX1JHr3mX8P35HWMvLhuQxl7dbct3ZGF0aizqPqsWMS-S90jSj0O5Gp2d66bDvENCjNnOFQ_QNOyENH0LFNYurLLTV3ZghIXSodo5HWs7Lpyizu0esuhUU6L637y5BELUArDwfN93SSS6DYIO1CfnqZttCRxO';
+var lightningUrls = [
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/1/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/2/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
+];
 
 // VIIRS hotspots, we'll fetch three results and merge them
 var viirsUrls = [
@@ -447,8 +451,7 @@ function getFireTimeSeries () {
   });
 };
 
-// Return last two week's worth of lightning data; either fetch from cache, or
-// update from upstream sources.
+// Fetch & merge 3 data streams to yield past 24 hours lightning data.
 function getLightningGeoJSON () {
   return new Promise(function (resolve, reject) {
 
@@ -457,29 +460,43 @@ function getLightningGeoJSON () {
 
     if (undefined === lightningGeoJSON) {
       // Cache miss.
-      logger.info('Attempting to update cache from upstream data...');
+      logger.info('Attempting to update lightning cache from upstream data...');
 
-      request.getAsync(twoWeeksLightningUrl).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
+      Promise.map(lightningUrls, function (url) {
+        return request.getAsync(url).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
           if (response.statusCode === 200) {
             try {
-              lightningGeoJSON = processLightningGeoJSON(JSON.parse(body));
-              writePersistentCache(lightningGeoJSON, lightningFileCacheName);
-              cache.set('lightningGeoJSON', lightningGeoJSON);
-              resolve(lightningGeoJSON);
-              logger.info('Upstream data fetched OK, processing and updating cache...');
+              return [JSON.parse(body), url];
             } catch (err) {
-              reject(new Error('Could not parse upstream JSON'));
+              reject(new Error('Could not parse upstream Lightning JSON'));
             }
           } else {
-            logger.error('Got something other than HTTP 200', response)
-            reject(new Error('Upstream service status code: ' + response.statusCode));
+            logger.error('Lightning: Got something other than HTTP 200', response)
+            reject(new Error('Lightning: Upstream service status code: ' + response.statusCode));
           }
         })
         .catch(function(err) {
-          logger.error('Failed inside `request.getAsync(url).timeout().spread()` code segment');
+          logger.error('Lightning: Failed inside `request.getAsync(url).timeout().spread()` code segment');
           reject(err);
         });
+      }).catch(function (err) {
+        logger.error('Lightning: Failed inside `Promise.map()` code segment');
+        reject(err);
+      }).then(function (results) {
+        if(undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
+          logger.info('Upstream Lightning data fetched OK, processing and updating cache...');
 
+          // Each element in the `results` is a two-element array,
+          // first element is the data; 2nd is the URL.
+          lightningGeoJSON = processLightningGeoJSON(results[0][0], results[1][0], results[2][0]);
+          writePersistentCache(lightningGeoJSON, lightningFileCacheName);
+          cache.set('lightningGeoJSON', lightningGeoJSON);
+          resolve(lightningGeoJSON);
+        }
+      }).catch(function(err) {
+        logger.error('Could not parse Lightning GeoJSON from upstream server');
+        reject(err)
+      });
     } else {
       // Cache hit, serve data immediately.
       resolve(lightningGeoJSON);
@@ -570,7 +587,7 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
 
 // Process the Lightning GeoJSON, add data regarding amplitude meaning
 // to lightning strikes
-function processLightningGeoJSON (lightningStrikes) {
+function processLightningGeoJSON (l0, l1, l2) {
 
   // Function that formats the amplitude in the right way
   var parseLightningAmplitude = function(amp) {
@@ -583,10 +600,12 @@ function processLightningGeoJSON (lightningStrikes) {
     }
   }
 
+  var merged = Array.prototype.concat(l0.features, l1.features, l2.features)
+
   // Start by adding a few fields to each batch
-  _.each(lightningStrikes.features, function (feature, index, list) {
+  _.each(merged, function (feature, index, list) {
     list[index].properties.lightningtype = parseLightningAmplitude(feature.properties.AMPLITUDE)
   });
 
-  return lightningStrikes;
+  return merged;
 }
