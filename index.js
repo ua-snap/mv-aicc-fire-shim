@@ -209,7 +209,7 @@ function getViirs () {
           // first element is the data; 2nd is the URL.
           viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
           writePersistentCache(viirsGeoJSON, viirsFileCacheName);
-          cache.set('fireGeoJSON', viirsGeoJSON);
+          cache.set('viirsGeoJSON', viirsGeoJSON);
           resolve(viirsGeoJSON);
         }
       }).catch(function(err) {
