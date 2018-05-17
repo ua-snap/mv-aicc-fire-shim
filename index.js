@@ -3,6 +3,7 @@ var Promise = require('bluebird');
 var parse = require('csv-parse');
 var moment = require('moment');
 var winston = require('winston');
+var shp = require('shpjs');
 
 var logger = new (winston.Logger)({
   transports: [
@@ -37,6 +38,7 @@ const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCac
 
 const fireFileCacheName = 'fires.geojson';
 const lightningFileCacheName = 'lightning.geojson';
+const viirsShapefile = '/tmp/viirs.zip';
 const viirsFileCacheName = 'viirs.geojson';
 
 var app = express();
@@ -54,12 +56,8 @@ var lightningUrls = [
   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/2/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
 ];
 
-// VIIRS hotspots, we'll fetch three results and merge them
-var viirsUrls = [
-  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBSERVEDTIME%2C+CONFIDENCE%2C+BAND4TEMPFAHRENHEIT%2C+BAND5TEMPFAHRENHEIT&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBSERVEDTIME%2C+CONFIDENCE%2C+BAND4TEMPFAHRENHEIT%2C+BAND5TEMPFAHRENHEIT&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/6/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBSERVEDTIME%2C+CONFIDENCE%2C+BAND4TEMPFAHRENHEIT%2C+BAND5TEMPFAHRENHEIT&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson'
-]
+// VIIRS NASA FIRMS shapefile
+var viirsUrl = 'https://firms.modaps.eosdis.nasa.gov/data/active_fire/viirs/shapes/zips/VNP14IMGTDL_NRT_Alaska_48h.zip'
 
 // Used to set common headers for all responses
 function setCommonHeaders(res) {
@@ -179,53 +177,24 @@ function getViirs () {
     if (undefined === viirsGeoJSON) {
       // Cache miss.
       logger.info('Attempting to update VIIRS cache from upstream data...');
-
-      // Grab both API requests asynchronously
-      Promise.map(viirsUrls, function (url) {
-        return request.getAsync(url).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
-          if (response.statusCode === 200) {
-            try {
-              return [JSON.parse(body), url];
-            } catch (err) {
-              reject(new Error('Could not parse upstream VIIRS JSON'));
-            }
-          } else {
-            logger.error('VIIRS: Got something other than HTTP 200', response)
-            reject(new Error('VIIRS: Upstream service status code: ' + response.statusCode));
-          }
-        })
-        .catch(function(err) {
-          logger.error('VIIRS: Failed inside `request.getAsync(url).timeout().spread()` code segment');
-          reject(err);
-        });
-      }).catch(function (err) {
-        logger.error('VIIRS: Failed inside `Promise.map()` code segment');
-        reject(err);
-      }).then(function (results) {
-        if(undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
-          logger.info('Upstream data fetched OK, processing and updating cache...');
-
-          // Each element in the `results` is a two-element array,
-          // first element is the data; 2nd is the URL.
-          viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
+      request.getAsync({
+        url: viirsUrl,
+        encoding: null
+      }).spread(function (response, body) {
+        logger.info('Got VIIRS zipball, transforming to GeoJSON');
+        shp(body).then(function(geojson) {
+          viirsGeoJSON = geojson.features;
           writePersistentCache(viirsGeoJSON, viirsFileCacheName);
           cache.set('viirsGeoJSON', viirsGeoJSON);
+          logger.info('Successfully fetched & updated VIIRS cache');
           resolve(viirsGeoJSON);
-        }
-      }).catch(function(err) {
-        logger.error('Could not parse GeoJSON from upstream server');
-        reject(err)
-      });
-
+        });
+      })
     } else {
       // Cache hit, serve data immediately.
       resolve(viirsGeoJSON);
     }
   });
-}
-
-function processViirsJSON(viirs0_12, viirs12_24, viirs24_48) {
-  return _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
 }
 
 // Return current fire data; either fetch from cache, or
