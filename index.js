@@ -468,7 +468,6 @@ function getLightningGeoJSON () {
               list[index].properties.strikeTime = parseUpdatedTime(feature.properties.LOCALDATETIME)
               delete(list[index].properties.LOCALDATETIME)
             });
-            console.log(lightningGeoJSON);
             writePersistentCache(lightningGeoJSON, lightningFileCacheName);
             cache.set('lightningGeoJSON', lightningGeoJSON);
             resolve(lightningGeoJSON);
