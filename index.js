@@ -48,11 +48,7 @@ var inactiveFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatu
 
 var fireTimeSeriesUrl = 'https://fire.ak.blm.gov/content/aicc/Statistics%20Directory/Alaska%20Daily%20Stats%20-%202004%20to%20Present.csv';
 
-var lightningUrls = [
-  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/1/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/2/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBJECTID%2C+STROKETYPE%2C+UTCDATETIME%2C+LOCALDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+AMPLITUDE%2C+STRIKETIME%2C+STRIKESEQNUMBER&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-];
+var lightningUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/0/query?where=AMPLITUDE%3E0%0D%0A&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=LOCALDATETIME&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson';
 
 // VIIRS hotspots, we'll fetch three results and merge them
 var viirsUrls = [
@@ -451,7 +447,6 @@ function getFireTimeSeries () {
   });
 };
 
-// Fetch & merge 3 data streams to yield past 24 hours lightning data.
 function getLightningGeoJSON () {
   return new Promise(function (resolve, reject) {
 
@@ -462,36 +457,26 @@ function getLightningGeoJSON () {
       // Cache miss.
       logger.info('Attempting to update lightning cache from upstream data...');
 
-      Promise.map(lightningUrls, function (url) {
-        return request.getAsync(url).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
-          if (response.statusCode === 200) {
-            try {
-              return [JSON.parse(body), url];
-            } catch (err) {
-              reject(new Error('Could not parse upstream Lightning JSON'));
-            }
-          } else {
-            logger.error('Lightning: Got something other than HTTP 200', response)
-            reject(new Error('Lightning: Upstream service status code: ' + response.statusCode));
-          }
-        })
-        .catch(function(err) {
-          logger.error('Lightning: Failed inside `request.getAsync(url).timeout().spread()` code segment');
-          reject(err);
-        });
-      }).catch(function (err) {
-        logger.error('Lightning: Failed inside `Promise.map()` code segment');
-        reject(err);
-      }).then(function (results) {
-        if(undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
-          logger.info('Upstream Lightning data fetched OK, processing and updating cache...');
+      request.getAsync(lightningUrl).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
+        if (response.statusCode === 200) {
+          try {
 
-          // Each element in the `results` is a two-element array,
-          // first element is the data; 2nd is the URL.
-          lightningGeoJSON = processLightningGeoJSON(results[0][0], results[1][0], results[2][0]);
-          writePersistentCache(lightningGeoJSON, lightningFileCacheName);
-          cache.set('lightningGeoJSON', lightningGeoJSON);
-          resolve(lightningGeoJSON);
+            var lightningGeoJSON = JSON.parse(body).features
+
+            // Modify a few fields, and reduce amount of data being sent.
+            _.each(lightningGeoJSON, function (feature, index, list) {
+              list[index].properties.strikeTime = parseUpdatedTime(feature.properties.LOCALDATETIME)
+              delete(list[index].properties.LOCALDATETIME)
+            });
+            writePersistentCache(lightningGeoJSON, lightningFileCacheName);
+            cache.set('lightningGeoJSON', lightningGeoJSON);
+            resolve(lightningGeoJSON);
+          } catch (err) {
+            reject(new Error('Could not parse upstream Lightning JSON'));
+          }
+        } else {
+          logger.error('Lightning: Got something other than HTTP 200', response)
+          reject(new Error('Lightning: Upstream service status code: ' + response.statusCode));
         }
       }).catch(function(err) {
         logger.error('Could not parse Lightning GeoJSON from upstream server');
@@ -511,17 +496,17 @@ app.listen(serverPort, function () {
   logger.info('Server running on', ':', serverPort);
 });
 
+// Function that formats the update time into the desired foramt
+var parseUpdatedTime = function(t) {
+  return moment.utc(moment.unix(t / 1000)).format('MMMM D, h:mm a')
+}
+
 // Merge information from the two API endpoints into an array of GeoJSON Features.
 function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimeters, inactiveFires) {
 
   // Function that formats the size of the fire into the desired format
   var parseAcres = function(a) {
     return parseFloat(a).toFixed(2);
-  }
-
-  // Function that formats the update time into the desired foramt
-  var parseUpdatedTime = function(t) {
-    return moment.utc(moment.unix(t / 1000)).format('MMMM D, h:mm a')
   }
 
   // Start by adding a few fields to each batch
@@ -583,29 +568,4 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
     }
   });
   return mergedFeatures;
-}
-
-// Process the Lightning GeoJSON, add data regarding amplitude meaning
-// to lightning strikes
-function processLightningGeoJSON (l0, l1, l2) {
-
-  // Function that formats the amplitude in the right way
-  var parseLightningAmplitude = function(amp) {
-    if (amp < 0) {
-      return "NEGATIVE";
-    } else if (amp > 0) {
-      return "POSITIVE";
-    } else {
-      return "CLOUD2CLOUD";
-    }
-  }
-
-  var merged = Array.prototype.concat(l0.features, l1.features, l2.features)
-
-  // Start by adding a few fields to each batch
-  _.each(merged, function (feature, index, list) {
-    list[index].properties.lightningtype = parseLightningAmplitude(feature.properties.AMPLITUDE)
-  });
-
-  return merged;
 }
