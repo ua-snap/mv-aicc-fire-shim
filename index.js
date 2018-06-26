@@ -36,7 +36,6 @@ const fetchUpstreamDataTimeout = 30000;
 const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCacheTimeout });
 
 const fireFileCacheName = 'fires.geojson';
-const lightningFileCacheName = 'lightning.geojson';
 const viirsFileCacheName = 'viirs.geojson';
 
 var app = express();
@@ -52,14 +51,6 @@ var inactiveFirePerimetersUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/Ma
 var inactiveFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2C+ID%2C+NAME%2C+LASTUPDATETIME%2C+LATITUDE%2C+LONGITUDE%2C+DISCOVERYDATETIME%2C+IADATETIME%2C+IASIZE%2C+CONTROLDATETIME%2C+OUTDATE%2C+ESTIMATEDTOTALACRES%2C+ACTUALTOTALACRES%2C+GENERALCAUSE%2C+SPECIFICCAUSE%2C+STRUCTURESTHREATENED%2C+STRUCTURESBURNED%2C+PRIMARYFUELTYPE%2C+FALSEALARM%2C+FORCESITRPT%2C+FORCESITRPTSTATUS%2C+RECORDNUMBER%2C+COMPLEX%2C+ISCOMPLEX%2C+IRWINID%2C+CONTAINMENTDATETIME%2C+CONFLICTIRWINID%2C+COMPLEXPARENTIRWINID%2C+MERGEDINTO%2C+MERGEDDATE%2C+ISVALID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=4326&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&returnDistinctValues=false&resultOffset=&resultRecordCount=&f=geojson';
 
 var fireTimeSeriesUrl = 'https://fire.ak.blm.gov/content/aicc/Statistics%20Directory/Alaska%20Daily%20Stats%20-%202004%20to%20Present.csv';
-
-var lightningUrlTemplate = _.template('https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Lightning/FeatureServer/<%= endpoint %>/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=LOCALDATETIME%2C+AMPLITUDE&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson');
-
-var lightningUrls = [
-  lightningUrlTemplate({endpoint:0}),
-  lightningUrlTemplate({endpoint:1}),
-  lightningUrlTemplate({endpoint:2})
-];
 
 // VIIRS hotspots, we'll fetch three results and merge them
 var viirsUrls = [
@@ -138,32 +129,8 @@ app.get('/fire-time-series', function (req, res) {
     });
 });
 
-app.get('/lightning-data', function (req, res) {
-  getLightningGeoJSON()
-    // After fetching the merged data from cache or
-    // an upstream fetch, it's available as lightningGeoJSON
-    // in the success handler below
-    .then(function (lightningGeoJSON) {
-      setCommonHeaders(res);
-      res.json({
-        type: 'FeatureCollection',
-        features: lightningGeoJSON.features,
-        totalStrikes: lightningGeoJSON.totalStrikes,
-        source: 'memory cache'
-      });
-    })
-    // Something failed upstream and the cache is stale,
-    // return empty 500.
-    .catch(function (err) {
-      handleUpstreamError(res, err, 'lightningGeoJSON', lightningFileCacheName)
-    });
-});
-
 app.get('/viirs', function (req, res) {
   getViirs()
-    // After fetching the merged data from cache or
-    // an upstream fetch, it's available as lightningGeoJSON
-    // in the success handler below
     .then(function (viirsGeoJSON) {
       setCommonHeaders(res);
       res.json({
@@ -459,59 +426,6 @@ function getFireTimeSeries () {
   });
 };
 
-// Fetch & merge 3 data streams to yield past 24 hours lightning data.
-function getLightningGeoJSON () {
-  return new Promise(function (resolve, reject) {
-
-    // Try cache...
-    var lightningGeoJSON = cache.get('lightningGeoJSON');
-
-    if (undefined === lightningGeoJSON) {
-      // Cache miss.
-      logger.info('Attempting to update lightning cache from upstream data...');
-
-      Promise.map(lightningUrls, function (url) {
-        return request.getAsync(url).timeout(fetchUpstreamDataTimeout).spread(function (response, body) {
-          if (response.statusCode === 200) {
-            try {
-              return [JSON.parse(body), url];
-            } catch (err) {
-              reject(new Error('Could not parse upstream Lightning JSON'));
-            }
-          } else {
-            logger.error('Lightning: Got something other than HTTP 200', response)
-            reject(new Error('Lightning: Upstream service status code: ' + response.statusCode));
-          }
-        })
-        .catch(function(err) {
-          logger.error('Lightning: Failed inside `request.getAsync(url).timeout().spread()` code segment');
-          reject(err);
-        });
-      }).catch(function (err) {
-        logger.error('Lightning: Failed inside `Promise.map()` code segment');
-        reject(err);
-      }).then(function (results) {
-        if(undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
-          logger.info('Upstream Lightning data fetched OK, processing and updating cache...');
-
-          // Each element in the `results` is a two-element array,
-          // first element is the data; 2nd is the URL.
-          lightningGeoJSON = processLightningGeoJSON(results[0][0], results[1][0], results[2][0]);
-          writePersistentCache(lightningGeoJSON, lightningFileCacheName);
-          cache.set('lightningGeoJSON', lightningGeoJSON);
-          resolve(lightningGeoJSON);
-        }
-      }).catch(function(err) {
-        logger.error('Could not parse Lightning GeoJSON from upstream server');
-        reject(err)
-      });
-    } else {
-      // Cache hit, serve data immediately.
-      resolve(lightningGeoJSON);
-    }
-  });
-};
-
 // Set up server variables and launch node HTTP server
 var serverPort = process.env.OPENSHIFT_NODEJS_PORT || process.env.PORT || 3000;
 
@@ -591,34 +505,4 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
     }
   });
   return mergedFeatures;
-}
-
-// Process the Lightning GeoJSON; merge feeds, limit results to last 300 strikes, add formatted date/time.
-function processLightningGeoJSON (l0, l1, l2) {
-
-  var merged = Array.prototype.concat(l0.features, l1.features, l2.features)
-  var totalStrikes = numberWithCommas(merged.length)
-
-  if(merged.length > 300) {
-    merged = merged.splice(0, 300)
-  }
-
-  // Start by adding a few fields to each batch
-  _.each(merged, function (feature, index, list) {
-    list[index].properties.strikeTime = parseUpdatedTime(feature.properties.LOCALDATETIME)
-    delete(list[index].properties.LOCALDATETIME)
-    if(feature.properties.AMPLITUDE > 0) {
-      list[index].properties.type = 'Positive'
-    } else if (feature.properties.AMPLITUDE < 0) {
-      list[index].properties.type = 'Negative'
-    } else {
-      list[index].properties.type = 'Cloud to cloud'
-    }
-    delete(list[index].properties.AMPLITUDE)
-  });
-
-  return {
-    features: merged,
-    totalStrikes: totalStrikes
-  };
 }
