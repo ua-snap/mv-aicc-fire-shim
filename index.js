@@ -504,5 +504,23 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
       mergedFeatures.push(feature);
     }
   });
-  return mergedFeatures;
+
+  // Finally, flush any fields that we're not using in the GUI.
+  // We only need active, NAME, acres, GENERALCAUSE, updated, OUTDATE, and
+  // discovered
+  var strippedFeatures = [];
+  _.each(mergedFeatures, function(feature) {
+    feature.properties = {
+      active: feature.properties.active,
+      NAME: feature.properties.NAME,
+      acres: feature.properties.acres,
+      GENERALCAUSE: feature.properties.GENERALCAUSE,
+      updated: feature.properties.updated,
+      OUTDATE: feature.properties.OUTDATE,
+      discovered: feature.properties.discovered
+    };
+    strippedFeatures.push(feature);
+  })
+
+  return strippedFeatures;
 }
