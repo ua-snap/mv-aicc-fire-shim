@@ -279,7 +279,7 @@ function getFireTimeSeries () {
       // These are all the years with 1+ million acres burned since 2004.
       var topYears = ['2004', '2015', '2005', '2009', '2010', '2013'];
 
-      var startDay = 121; // May 1
+      var startDay = 91; // April 1, usually (not in leap year)
       var endDay = 274;   // September 30
 
       // This endpoint will output the top years + current year.
@@ -363,6 +363,8 @@ function getFireTimeSeries () {
         return fixedData;
       };
 
+      // Restructure data to fit Plotly on client,
+      // and compute an average.
       function formatData (data) {
         var formattedData = {};
 
@@ -382,6 +384,46 @@ function getFireTimeSeries () {
               }
             }
           }
+        }
+
+        var tempDates = {};
+        var tempAcres = {};
+
+        for (var year in data) {
+          if (
+            data.hasOwnProperty(year)
+            && year >= 2004
+            && year < moment().year()
+          ) {
+            for (var month in data[year]) {
+              for (var day in data[year][month]) {
+                var dateLabel = moment.months(month - 1) + ' ' + day;
+                tempDates[dateLabel] = dateLabel;
+                if(!tempAcres[dateLabel]) {
+                  tempAcres[dateLabel] = parseFloat(data[year][month][day]);
+                } else {
+                  tempAcres[dateLabel] += parseFloat(data[year][month][day]);
+                }
+              }
+            }
+          }
+        }
+
+        var tempAverageDates = [];
+        var tempAverageAcres = [];
+        var yearRange = (moment().year() - 1) - 2004;
+
+        _.each(tempDates, function(dateLabel) {
+          tempAverageDates.push(dateLabel);
+        })
+        _.each(tempAcres, function(totalAcres) {
+          let averageAcres = totalAcres / yearRange;
+          tempAverageAcres.push(averageAcres.toFixed(2))
+        })
+
+        formattedData['Average'] = {
+          dates: tempAverageDates,
+          acres: tempAverageAcres
         }
 
         return formattedData;
@@ -408,7 +450,6 @@ function getFireTimeSeries () {
           // fixedData stores the data with data gaps filled and cumulative totals
           // strictly enforced by never decreasing throughout a year.
           var fixedData = fixData(parsedData);
-
           // fireTimeSeries stores only the years that will be output to the
           // endpoint, with the dates and acres stored in separate arrays to
           // make the data ready for use in Plotly.
@@ -507,7 +548,12 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
 
   // Finally, flush any fields that we're not using in the GUI.
   // We only need active, NAME, acres, GENERALCAUSE, updated, OUTDATE, and
-  // discovered
+  // discovered.
+  //
+  // At the same time, if any fires have `null` or other
+  // zero or non-numeric acres, remove them.  See the
+  // 2019 fire named 'CTR 10' for an example where this
+  // was needed to prevent NaN from the GUI.
   var strippedFeatures = [];
   _.each(mergedFeatures, function(feature) {
     feature.properties = {
@@ -519,7 +565,11 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
       OUTDATE: feature.properties.OUTDATE,
       discovered: feature.properties.discovered
     };
-    strippedFeatures.push(feature);
+
+    // This filters out null, NaN and "0" fire sizes.
+    if(feature.properties.acres > 0) {
+      strippedFeatures.push(feature);
+    }
   })
 
   return strippedFeatures;
