@@ -421,7 +421,7 @@ function getFireTimeSeries () {
           tempAverageAcres.push(averageAcres.toFixed(2))
         })
 
-        formattedData['Average'] = {
+        formattedData['Average, 2004-2018'] = {
           dates: tempAverageDates,
           acres: tempAverageAcres
         }
