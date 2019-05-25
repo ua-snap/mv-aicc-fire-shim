@@ -474,9 +474,11 @@ app.listen(serverPort, function () {
   logger.info('Server running on', ':', serverPort);
 });
 
-// Function that formats the update time into the desired foramt
+// Function that formats the update time into the desired format
 var parseUpdatedTime = function(t) {
-  return moment.utc(moment.unix(t / 1000)).format('MMMM D, h:mm a')
+  // No-op.  Return the unix timestamp as-is, let the client
+  // parse for correct handling of local time zones.
+  return t;
 }
 
 // Merge information from the two API endpoints into an array of GeoJSON Features.
