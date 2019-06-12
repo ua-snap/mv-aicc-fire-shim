@@ -2,3 +2,8 @@ fires.geojson
 node_modules
 lightning.geojson
 viirs.geojson
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
