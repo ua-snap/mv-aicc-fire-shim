@@ -7,3 +7,7 @@ viirs.geojson
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# keep public folder
+public/*
+!public/.gitkeep

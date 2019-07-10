@@ -38,7 +38,10 @@ const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCac
 const fireFileCacheName = 'fires.geojson';
 const viirsFileCacheName = 'viirs.geojson';
 
+const PUBLIC_ROOT = 'public'
+
 var app = express();
+app.use(express.static(PUBLIC_ROOT))
 
 // https://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript
 const numberWithCommas = (x) => {
@@ -264,7 +267,7 @@ function getFireGeoJSON () {
 // Write the Fire points/perims to a disk cache,
 // which will be the last resort if the upstream isn't available.
 var writePersistentCache = function (currentGeoJSON, fileCacheName) {
-  fs.writeFileSync(fileCacheName, JSON.stringify(currentGeoJSON));
+  fs.writeFileSync(PUBLIC_ROOT + '/' + fileCacheName, JSON.stringify(currentGeoJSON));
 }
 
 function getFireTimeSeries () {
@@ -455,6 +458,7 @@ function getFireTimeSeries () {
           // make the data ready for use in Plotly.
           fireTimeSeries = formatData(fixedData);
           cache.set('fireTimeSeries', fireTimeSeries);
+          writePersistentCache(fireTimeSeries, 'tally.geojson')
           resolve(fireTimeSeries);
         });
       }).catch(function(err) {
