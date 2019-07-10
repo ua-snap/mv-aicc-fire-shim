@@ -458,7 +458,7 @@ function getFireTimeSeries () {
           // make the data ready for use in Plotly.
           fireTimeSeries = formatData(fixedData);
           cache.set('fireTimeSeries', fireTimeSeries);
-          writePersistentCache(fireTimeSeries, 'tally.geojson')
+          writePersistentCache(fireTimeSeries, 'tally.json')
           resolve(fireTimeSeries);
         });
       }).catch(function(err) {
