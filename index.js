@@ -115,7 +115,7 @@ app.get('/', function (req, res) {
     });
 });
 
-app.get('/fire-time-series', function (req, res) {
+app.get('/tally', function (req, res) {
   getFireTimeSeries()
     // After fetching the merged data from cache or
     // an upstream fetch, it's available as fireGeoJSON
