@@ -1,4 +1,5 @@
 var express = require('express');
+var cors = require('cors');
 var Promise = require('bluebird');
 var parse = require('csv-parse');
 var moment = require('moment');
@@ -38,6 +39,7 @@ const tallyFileCacheName = 'tally.json'; // not geojson!
 const PUBLIC_ROOT = 'public'
 
 var app = express();
+app.use(cors());
 app.use(express.static(PUBLIC_ROOT))
 
 // https://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript
@@ -59,12 +61,6 @@ var viirsUrls = [
    'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/6/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=OBSERVEDTIME%2C+CONFIDENCE%2C+BAND4TEMPFAHRENHEIT%2C+BAND5TEMPFAHRENHEIT&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson'
 ]
 
-// Used to set common headers for all responses
-function setCommonHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', '*');
-}
-
 // Long-running process to keep refreshing the data
 // periodically.
 function cron() {
@@ -78,7 +74,6 @@ cron() // run once to preload
 app.get('/', function (req, res) {
   getFireGeoJSON()
     .then(function (fireGeoJSON) {
-      setCommonHeaders(res);
       res.json({
         type: 'FeatureCollection',
         features: fireGeoJSON
@@ -93,7 +88,6 @@ app.get('/', function (req, res) {
 app.get('/tally', function (req, res) {
   getFireTimeSeries()
     .then(function (fireTimeSeries) {
-      setCommonHeaders(res);
       res.json(fireTimeSeries);
     })
     .catch(function (err) {
@@ -105,7 +99,6 @@ app.get('/tally', function (req, res) {
 app.get('/viirs', function (req, res) {
   getViirs()
     .then(function (viirsGeoJSON) {
-      setCommonHeaders(res);
       res.json({
         type: 'FeatureCollection',
         features: viirsGeoJSON
