@@ -206,8 +206,23 @@ function getViirs () {
   });
 }
 
+// Combine VIIRS info and turn it into a single MultiPoint
+// GeoJSON entity to reduce data transmission.
 function processViirsJSON(viirs0_12, viirs12_24, viirs24_48) {
-  return _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
+  var viirs = _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
+  var mp = [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": []
+      }
+    }
+  ]
+  _.each(viirs, e => {
+    mp[0].geometry.coordinates.push(e.geometry.coordinates)
+  })
+  return mp
 }
 
 // Return current fire data; either fetch from cache, or
