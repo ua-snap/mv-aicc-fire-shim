@@ -27,10 +27,10 @@ var _ = require('lodash');
 
 // How long should we wait for the upstream service
 // before giving up (ms)?
-const fetchUpstreamDataTimeout = 1800000; // 30min
+const fetchUpstreamDataTimeout = 60000; // 30min
 
 // How long should we wait between regenerating the data (ms)?
-const CRON_INTERVAL = 60000;
+const CRON_INTERVAL = 1800000;
 
 const fireFileCacheName = 'fires.geojson';
 const viirsFileCacheName = 'viirs.geojson';
