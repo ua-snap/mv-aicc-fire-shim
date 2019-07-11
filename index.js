@@ -186,7 +186,11 @@ function getViirs () {
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
           viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
-          writePersistentCache(viirsGeoJSON, viirsFileCacheName);
+          writePersistentCache({
+            type: 'FeatureCollection',
+            features: viirsGeoJSON,
+            source: 'memory cache'
+          }, viirsFileCacheName);
           cache.set('viirsGeoJSON', viirsGeoJSON);
           resolve(viirsGeoJSON);
         }
@@ -248,7 +252,11 @@ function getFireGeoJSON () {
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
           fireGeoJSON = processGeoJSON(results[0][0], results[1][0], results[2][0], results[3][0]);
-          writePersistentCache(fireGeoJSON, fireFileCacheName);
+          writePersistentCache({
+            type: 'FeatureCollection',
+            features: fireGeoJSON,
+            source: 'memory cache'
+          }, fireFileCacheName);
           cache.set('fireGeoJSON', fireGeoJSON);
           resolve(fireGeoJSON);
         }
