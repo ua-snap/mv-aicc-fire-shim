@@ -38,7 +38,10 @@ const cache = new NodeCache({ stdTTL: memoryCacheTimeout, checkperiod: memoryCac
 const fireFileCacheName = 'fires.geojson';
 const viirsFileCacheName = 'viirs.geojson';
 
+const PUBLIC_ROOT = 'public'
+
 var app = express();
+app.use(express.static(PUBLIC_ROOT))
 
 // https://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript
 const numberWithCommas = (x) => {
@@ -112,7 +115,7 @@ app.get('/', function (req, res) {
     });
 });
 
-app.get('/fire-time-series', function (req, res) {
+app.get('/tally', function (req, res) {
   getFireTimeSeries()
     // After fetching the merged data from cache or
     // an upstream fetch, it's available as fireGeoJSON
@@ -183,7 +186,11 @@ function getViirs () {
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
           viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
-          writePersistentCache(viirsGeoJSON, viirsFileCacheName);
+          writePersistentCache({
+            type: 'FeatureCollection',
+            features: viirsGeoJSON,
+            source: 'memory cache'
+          }, viirsFileCacheName);
           cache.set('viirsGeoJSON', viirsGeoJSON);
           resolve(viirsGeoJSON);
         }
@@ -199,8 +206,23 @@ function getViirs () {
   });
 }
 
+// Combine VIIRS info and turn it into a single MultiPoint
+// GeoJSON entity to reduce data transmission.
 function processViirsJSON(viirs0_12, viirs12_24, viirs24_48) {
-  return _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
+  var viirs = _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
+  var mp = [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": []
+      }
+    }
+  ]
+  _.each(viirs, e => {
+    mp[0].geometry.coordinates.push(e.geometry.coordinates)
+  })
+  return mp
 }
 
 // Return current fire data; either fetch from cache, or
@@ -245,7 +267,11 @@ function getFireGeoJSON () {
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
           fireGeoJSON = processGeoJSON(results[0][0], results[1][0], results[2][0], results[3][0]);
-          writePersistentCache(fireGeoJSON, fireFileCacheName);
+          writePersistentCache({
+            type: 'FeatureCollection',
+            features: fireGeoJSON,
+            source: 'memory cache'
+          }, fireFileCacheName);
           cache.set('fireGeoJSON', fireGeoJSON);
           resolve(fireGeoJSON);
         }
@@ -264,7 +290,7 @@ function getFireGeoJSON () {
 // Write the Fire points/perims to a disk cache,
 // which will be the last resort if the upstream isn't available.
 var writePersistentCache = function (currentGeoJSON, fileCacheName) {
-  fs.writeFileSync(fileCacheName, JSON.stringify(currentGeoJSON));
+  fs.writeFileSync(PUBLIC_ROOT + '/' + fileCacheName, JSON.stringify(currentGeoJSON));
 }
 
 function getFireTimeSeries () {
@@ -455,6 +481,7 @@ function getFireTimeSeries () {
           // make the data ready for use in Plotly.
           fireTimeSeries = formatData(fixedData);
           cache.set('fireTimeSeries', fireTimeSeries);
+          writePersistentCache(fireTimeSeries, 'tally.json')
           resolve(fireTimeSeries);
         });
       }).catch(function(err) {
