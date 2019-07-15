@@ -71,7 +71,12 @@ function cron() {
 setInterval(cron, CRON_INTERVAL)
 cron() // run once to preload
 
+// For AWS health checker -- if we're alive, we're OK
 app.get('/', function (req, res) {
+  res.status(200).send('OK');
+});
+
+app.get('/fires', function (req, res) {
   getFireGeoJSON()
     .then(function (fireGeoJSON) {
       res.json({
