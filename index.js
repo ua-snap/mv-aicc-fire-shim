@@ -1,27 +1,26 @@
 var express = require('express');
 var cors = require('cors');
 var Promise = require('bluebird');
-var parse = require('csv-parse');
 var moment = require('moment');
 var winston = require('winston');
 
 // For running in local development mode to avoid
 // an issue with HTTPS resolving properly (probably
 // an issue with macos)
-if (process.env["NODE_DEBUG"]) {
-  process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
+if (process.env.NODE_DEBUG) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
 }
 
 var logger = new (winston.Logger)({
   transports: [
     new (winston.transports.Console)({
-      timestamp: function() {
+      timestamp: function () {
         return moment().format();
       },
-      formatter: function(options) {
+      formatter: function (options) {
         // Return string will be passed to logger.
-        return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (options.message ? options.message : '') +
-          (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
+        return options.timestamp() + ' ' + options.level.toUpperCase() + ' ' + (options.message ? options.message : '') +
+          (options.meta && Object.keys(options.meta).length ? '\n\t' + JSON.stringify(options.meta) : '');
       }
     })
   ]
@@ -29,7 +28,7 @@ var logger = new (winston.Logger)({
 
 const fs = require('fs');
 
-var request = Promise.promisifyAll(require('request'), {multiArgs: true});
+var request = Promise.promisifyAll(require('request'), { multiArgs: true });
 var _ = require('lodash');
 
 // How long should we wait for the upstream service
@@ -43,16 +42,11 @@ const CRON_INTERVAL = 1800000;
 const fireFileCacheName = 'fires.geojson';
 const viirsFileCacheName = 'viirs.geojson';
 
-const PUBLIC_ROOT = 'public'
+const PUBLIC_ROOT = 'public';
 
 var app = express();
 app.use(cors());
-app.use(express.static(PUBLIC_ROOT))
-
-// https://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript
-const numberWithCommas = (x) => {
-  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
+app.use(express.static(PUBLIC_ROOT));
 
 var activeFirePerimetersUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CACRES%2CIRWINID%2CPRESCRIBED&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
 var activeFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CLASTUPDATEDATETIME%2CLATITUDE%2CLONGITUDE%2CPRESCRIBEDFIRE%2CDISCOVERYDATETIME%2CESTIMATEDTOTALACRES%2CSUMMARY%2CIRWINID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
@@ -62,18 +56,18 @@ var inactiveFiresUrl = 'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatu
 // VIIRS hotspots, we'll fetch three results and merge them
 var viirsUrls = [
   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
-   'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/6/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson'
-]
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson',
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/6/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson'
+];
 
 // Long-running process to keep refreshing the data
 // periodically.
-function cron() {
+function cron () {
   getFireGeoJSON();
   getViirs();
 }
-setInterval(cron, CRON_INTERVAL)
-cron() // run once to preload
+setInterval(cron, CRON_INTERVAL);
+cron(); // run once to preload
 
 // For AWS health checker -- if we're alive, we're OK
 app.get('/', function (req, res) {
@@ -90,7 +84,7 @@ app.get('/fires', function (req, res) {
     })
     .catch(function (err) {
       logger.error(err);
-      res.status(500).send(err)
+      res.status(500).send(err);
     });
 });
 
@@ -109,7 +103,7 @@ app.get('/viirs', function (req, res) {
 });
 
 function getViirs () {
-  return new Promise(function(resolve, reject) {
+  return new Promise(function (resolve, reject) {
     logger.info('[VIIRS] Attempting to update VIIRS cache from upstream data...');
     // Grab both API requests asynchronously
     Promise.map(viirsUrls, function (url) {
@@ -121,54 +115,54 @@ function getViirs () {
             reject(new Error('Could not parse upstream VIIRS JSON'));
           }
         } else {
-          logger.error('VIIRS: Got something other than HTTP 200', response)
+          logger.error('VIIRS: Got something other than HTTP 200', response);
           reject(new Error('VIIRS: Upstream service status code: ' + response.statusCode));
         }
       })
-      .catch(function(err) {
-        logger.error('VIIRS: Failed inside `request.getAsync(url).timeout().spread()` code segment');
-        reject(err);
-      });
+        .catch(function (err) {
+          logger.error('VIIRS: Failed inside `request.getAsync(url).timeout().spread()` code segment');
+          reject(err);
+        });
     }).catch(function (err) {
       logger.error('VIIRS: Failed inside `Promise.map()` code segment');
       reject(err);
     }).then(function (results) {
-      if(undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
+      if (undefined !== results[0] && undefined !== results[1] && undefined !== results[2]) {
         logger.info('[VIIRS] Upstream data fetched OK, processing and updating cache...');
 
         // Each element in the `results` is a two-element array,
         // first element is the data; 2nd is the URL.
-        viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
+        var viirsGeoJSON = processViirsJSON(results[0][0], results[1][0], results[2][0]);
         writePersistentCache({
           type: 'FeatureCollection',
           features: viirsGeoJSON
         }, viirsFileCacheName);
         resolve(viirsGeoJSON);
       }
-    }).catch(function(err) {
+    }).catch(function (err) {
       logger.error('Could not parse GeoJSON from upstream server');
-      reject(err)
+      reject(err);
     });
   });
 }
 
 // Combine VIIRS info and turn it into a single MultiPoint
 // GeoJSON entity to reduce data transmission.
-function processViirsJSON(viirs0_12, viirs12_24, viirs24_48) {
-  var viirs = _.concat(viirs0_12.features, viirs12_24.features, viirs24_48.features);
+function processViirsJSON (viirs12, viirs24, viirs48) {
+  var viirs = _.concat(viirs12.features, viirs24.features, viirs48.features);
   var mp = [
     {
-      "type": "Feature",
-      "geometry": {
-        "type": "MultiPoint",
-        "coordinates": []
+      type: 'Feature',
+      geometry: {
+        type: 'MultiPoint',
+        coordinates: []
       }
     }
-  ]
+  ];
   _.each(viirs, e => {
-    mp[0].geometry.coordinates.push(e.geometry.coordinates)
-  })
-  return mp
+    mp[0].geometry.coordinates.push(e.geometry.coordinates);
+  });
+  return mp;
 }
 
 // Return current fire data; either fetch from cache, or
@@ -188,36 +182,34 @@ function getFireGeoJSON () {
             reject(new Error('Could not parse upstream JSON'));
           }
         } else {
-          logger.error('Got something other than HTTP 200', response)
+          logger.error('Got something other than HTTP 200', response);
           reject(new Error('Upstream service status code: ' + response.statusCode));
         }
       })
-      .catch(function(err) {
-        logger.error('Failed inside `request.getAsync(url).timeout().spread()` code segment');
-        reject(err);
-      });
+        .catch(function (err) {
+          logger.error('Failed inside `request.getAsync(url).timeout().spread()` code segment');
+          reject(err);
+        });
     }).catch(function (err) {
       logger.error('Failed inside `Promise.map()` code segment');
       reject(err);
     }).then(function (results) {
-
-        if(undefined !== results[0] && undefined !== results[1]) {
+      if (undefined !== results[0] && undefined !== results[1]) {
         logger.info('[Fire data] Upstream data fetched OK, processing and updating cache...');
 
         // Each element in the `results` is a two-element array,
         // first element is the data; 2nd is the URL.
-        fireGeoJSON = processGeoJSON(results[0][0], results[1][0], results[2][0], results[3][0]);
+        var fireGeoJSON = processGeoJSON(results[0][0], results[1][0], results[2][0], results[3][0]);
         writePersistentCache({
           type: 'FeatureCollection',
           features: fireGeoJSON
         }, fireFileCacheName);
         resolve(fireGeoJSON);
       }
-    }).catch(function(err) {
+    }).catch(function (err) {
       logger.error('Could not parse GeoJSON from upstream server');
-      reject(err)
+      reject(err);
     });
-
   });
 };
 
@@ -225,7 +217,7 @@ function getFireGeoJSON () {
 // which will be the last resort if the upstream isn't available.
 var writePersistentCache = function (currentGeoJSON, fileCacheName) {
   fs.writeFileSync(PUBLIC_ROOT + '/' + fileCacheName, JSON.stringify(currentGeoJSON));
-}
+};
 
 // Set up server variables and launch node HTTP server
 var serverPort = process.env.PORT || 3000;
@@ -235,19 +227,18 @@ app.listen(serverPort, function () {
 });
 
 // Function that formats the update time into the desired format
-var parseUpdatedTime = function(t) {
+var parseUpdatedTime = function (t) {
   // No-op.  Return the unix timestamp as-is, let the client
   // parse for correct handling of local time zones.
   return t;
-}
+};
 
 // Merge information from the two API endpoints into an array of GeoJSON Features.
 function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimeters, inactiveFires) {
-
   // Function that formats the size of the fire into the desired format
-  var parseAcres = function(a) {
+  var parseAcres = function (a) {
     return parseFloat(a).toFixed(2);
-  }
+  };
 
   // Start by adding a few fields to each batch
   _.each(activeFirePerimeters.features, function (feature, index, list) {
@@ -302,8 +293,8 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
 
   // Sometimes, there's a fire perimeter but no way to tie it to
   // the other list of info (!).
-  _.each(indexedFirePerimeters, function(feature, key) {
-    if(undefined === indexedAllFires[key]) {
+  _.each(indexedFirePerimeters, function (feature, key) {
+    if (undefined === indexedAllFires[key]) {
       mergedFeatures.push(feature);
     }
   });
@@ -317,7 +308,7 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
   // 2019 fire named 'CTR 10' for an example where this
   // was needed to prevent NaN from the GUI.
   var strippedFeatures = [];
-  _.each(mergedFeatures, function(feature) {
+  _.each(mergedFeatures, function (feature) {
     feature.properties = {
       active: feature.properties.active,
       NAME: feature.properties.NAME,
@@ -329,10 +320,10 @@ function processGeoJSON (activeFirePerimeters, activeFires, inactiveFirePerimete
     };
 
     // This filters out null, NaN and "0" fire sizes.
-    if(feature.properties.acres > 0) {
+    if (feature.properties.acres > 0) {
       strippedFeatures.push(feature);
     }
-  })
+  });
 
   return strippedFeatures;
 }
