@@ -13,3 +13,11 @@ npm start
 ```
 
 After running locally, the node service will be available at `localhost:3000`.
+
+If there are certificate validation errors, it's necessary to bypass that by doing this:
+
+```
+export NODE_DEBUG=true
+```
+
+Be sure and set this env var in the AWS environment if needed for production.
