@@ -11,7 +11,7 @@ if (process.env.NODE_DEBUG) {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
 }
 
-var logger = new winston.Logger({
+var logger = winston.createLogger({
   transports: [
     new winston.transports.Console({
       timestamp: function () {

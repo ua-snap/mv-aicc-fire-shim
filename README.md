@@ -4,8 +4,6 @@ This is a simple node service which fetches data from the AICC web services and 
 
 ## Installation
 
-Requires `node 4.4.2`, `npm 2.15.x`.
-
 ```
 npm install
 npm test // runs eslint
