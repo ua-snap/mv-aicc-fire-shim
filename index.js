@@ -1,8 +1,8 @@
-var express = require("express");
-var cors = require("cors");
-var Promise = require("bluebird");
-var moment = require("moment");
-var winston = require("winston");
+var express = require('express');
+var cors = require('cors');
+var Promise = require('bluebird');
+var moment = require('moment');
+var winston = require('winston');
 
 // For running in local development mode to avoid
 // an issue with HTTPS resolving properly (probably
@@ -21,23 +21,23 @@ var logger = winston.createLogger({
         // Return string will be passed to logger.
         return (
           options.timestamp() +
-          " " +
+          ' ' +
           options.level.toUpperCase() +
-          " " +
-          (options.message ? options.message : "") +
+          ' ' +
+          (options.message ? options.message : '') +
           (options.meta && Object.keys(options.meta).length
-            ? "\n\t" + JSON.stringify(options.meta)
-            : "")
+            ? '\n\t' + JSON.stringify(options.meta)
+            : '')
         );
-      }
-    })
-  ]
+      },
+    }),
+  ],
 });
 
-const fs = require("fs");
+const fs = require('fs');
 
-var request = Promise.promisifyAll(require("request"), { multiArgs: true });
-var _ = require("lodash");
+var request = Promise.promisifyAll(require('request'), { multiArgs: true });
+var _ = require('lodash');
 
 // How long should we wait for the upstream service
 // before giving up (ms)?
@@ -47,29 +47,27 @@ const fetchUpstreamDataTimeout = 60000; // 30min
 // Default = 30 minutes.
 const CRON_INTERVAL = 1800000;
 
-const fireFileCacheName = "fires.geojson";
-const viirsFileCacheName = "viirs.geojson";
+const fireFileCacheName = 'fires.geojson';
+const viirsFileCacheName = 'viirs.geojson';
 
-const PUBLIC_ROOT = "public";
+const PUBLIC_ROOT = 'public';
 
 var app = express();
 app.use(cors());
 app.use(express.static(PUBLIC_ROOT));
 
 var activeFirePerimetersUrl =
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CACRES%2CIRWINID%2CPRESCRIBED&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson";
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CACRES%2CIRWINID%2CPRESCRIBED&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
 var activeFiresUrl =
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=GENERALCAUSE%2COBJECTID%2CNAME%2CLASTUPDATEDATETIME%2CLATITUDE%2CLONGITUDE%2CPRESCRIBEDFIRE%2CDISCOVERYDATETIME%2CESTIMATEDTOTALACRES%2CSUMMARY%2CIRWINID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson";
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/0/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=GENERALCAUSE%2COBJECTID%2CNAME%2CLASTUPDATEDATETIME%2CLATITUDE%2CLONGITUDE%2CPRESCRIBEDFIRE%2CDISCOVERYDATETIME%2CESTIMATEDTOTALACRES%2CSUMMARY%2CIRWINID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
 var inactiveFirePerimetersUrl =
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CACRES%2CIRWINID%2CPRESCRIBED&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson";
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires_Perimeters/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=OBJECTID%2CNAME%2CACRES%2CIRWINID%2CPRESCRIBED&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
 var inactiveFiresUrl =
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=GENERALCAUSE%2COBJECTID%2CNAME%2CLASTUPDATEDATETIME%2CLATITUDE%2CLONGITUDE%2CDISCOVERYDATETIME%2CESTIMATEDTOTALACRES%2CSUMMARY%2COUTDATE%2CIRWINID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson";
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fires/MapServer/1/query?where=1%3D1&text=&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&relationParam=&outFields=GENERALCAUSE%2COBJECTID%2CNAME%2CLASTUPDATEDATETIME%2CLATITUDE%2CLONGITUDE%2CDISCOVERYDATETIME%2CESTIMATEDTOTALACRES%2CSUMMARY%2COUTDATE%2CIRWINID&returnGeometry=true&returnTrueCurves=false&maxAllowableOffset=&geometryPrecision=&outSR=&having=&returnIdsOnly=false&returnCountOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&gdbVersion=&historicMoment=&returnDistinctValues=false&resultOffset=&resultRecordCount=&queryByDistance=&returnExtentOnly=false&datumTransformation=&parameterValues=&rangeValues=&quantizationParameters=&featureEncoding=esriDefault&f=geojson';
 
 // VIIRS hotspots, we'll fetch three results and merge them
-var viirsUrls = [
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/1/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson",
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/3/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson",
-  "https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat/FeatureServer/5/query?where=1%3D1&objectIds=&time=&geometry=-167.74%2C51.94%2C-129.28%2C71.59&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=&returnTrueCurves=false&sqlFormat=none&f=geojson"
+var viirsUrl = [
+  'https://fire.ak.blm.gov/arcgis/rest/services/MapAndFeatureServices/Fire_Heat_VIIRS/FeatureServer/0/query?where=1%3D1&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&distance=&units=esriSRUnit_Foot&relationParam=&outFields=&returnGeometry=true&maxAllowableOffset=&geometryPrecision=&outSR=&havingClause=&gdbVersion=&historicMoment=&returnDistinctValues=false&returnIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&returnZ=false&returnM=false&multipatchOption=xyFootprint&resultOffset=&resultRecordCount=&returnTrueCurves=false&returnExceededLimitFeatures=false&quantizationParameters=&returnCentroid=false&sqlFormat=none&resultType=&featureEncoding=esriDefault&datumTransformation=&f=geojson',
 ];
 
 // Long-running process to keep refreshing the data
@@ -82,16 +80,16 @@ setInterval(cron, CRON_INTERVAL);
 cron(); // run once to preload
 
 // For AWS health checker -- if we're alive, we're OK
-app.get("/", function (req, res) {
-  res.status(200).send("OK");
+app.get('/', function (req, res) {
+  res.status(200).send('OK');
 });
 
-app.get("/fires", function (req, res) {
+app.get('/fires', function (req, res) {
   getFireGeoJSON()
     .then(function (fireGeoJSON) {
       res.json({
-        type: "FeatureCollection",
-        features: fireGeoJSON
+        type: 'FeatureCollection',
+        features: fireGeoJSON,
       });
     })
     .catch(function (err) {
@@ -100,12 +98,12 @@ app.get("/fires", function (req, res) {
     });
 });
 
-app.get("/viirs", function (req, res) {
+app.get('/viirs', function (req, res) {
   getViirs()
     .then(function (viirsGeoJSON) {
       res.json({
-        type: "FeatureCollection",
-        features: viirsGeoJSON
+        type: 'FeatureCollection',
+        features: viirsGeoJSON,
       });
     })
     .catch(function (err) {
@@ -117,10 +115,10 @@ app.get("/viirs", function (req, res) {
 function getViirs() {
   return new Promise(function (resolve, reject) {
     logger.info(
-      "[VIIRS] Attempting to update VIIRS cache from upstream data..."
+      '[VIIRS] Attempting to update VIIRS cache from upstream data...'
     );
     // Grab both API requests asynchronously
-    Promise.map(viirsUrls, function (url) {
+    Promise.map(viirsUrl, function (url) {
       return request
         .getAsync(url)
         .timeout(fetchUpstreamDataTimeout)
@@ -129,49 +127,41 @@ function getViirs() {
             try {
               return [JSON.parse(body), url];
             } catch (err) {
-              reject(new Error("Could not parse upstream VIIRS JSON"));
+              reject(new Error('Could not parse upstream VIIRS JSON'));
             }
           } else {
-            logger.error("VIIRS: Got something other than HTTP 200", response);
+            logger.error('VIIRS: Got something other than HTTP 200', response);
             reject(
               new Error(
-                "VIIRS: Upstream service status code: " + response.statusCode
+                'VIIRS: Upstream service status code: ' + response.statusCode
               )
             );
           }
         })
         .catch(function (err) {
           logger.error(
-            "VIIRS: Failed inside `request.getAsync(url).timeout().spread()` code segment"
+            'VIIRS: Failed inside `request.getAsync(url).timeout().spread()` code segment'
           );
           reject(err);
         });
     })
       .catch(function (err) {
-        logger.error("VIIRS: Failed inside `Promise.map()` code segment");
+        logger.error('VIIRS: Failed inside `Promise.map()` code segment');
         reject(err);
       })
       .then(function (results) {
-        if (
-          undefined !== results[0] &&
-          undefined !== results[1] &&
-          undefined !== results[2]
-        ) {
+        if (undefined !== results[0]) {
           logger.info(
-            "[VIIRS] Upstream data fetched OK, processing and updating cache..."
+            '[VIIRS] Upstream data fetched OK, processing and updating cache...'
           );
 
           // Each element in the `results` is a two-element array,
           // first element is the data; 2nd is the URL.
-          var viirsGeoJSON = processViirsJSON(
-            results[0][0],
-            results[1][0],
-            results[2][0]
-          );
+          var viirsGeoJSON = processViirsJSON(results[0][0]);
           writePersistentCache(
             {
-              type: "FeatureCollection",
-              features: viirsGeoJSON
+              type: 'FeatureCollection',
+              features: viirsGeoJSON,
             },
             viirsFileCacheName
           );
@@ -179,7 +169,7 @@ function getViirs() {
         }
       })
       .catch(function (err) {
-        logger.error("Could not parse GeoJSON from upstream server");
+        logger.error('Could not parse GeoJSON from upstream server');
         reject(err);
       });
   });
@@ -187,18 +177,18 @@ function getViirs() {
 
 // Combine VIIRS info and turn it into a single MultiPoint
 // GeoJSON entity to reduce data transmission.
-function processViirsJSON(viirs12, viirs24, viirs48) {
-  var viirs = _.concat(viirs12.features, viirs24.features, viirs48.features);
+function processViirsJSON(viirs) {
+  var viirs = _.concat(viirs.features);
   var mp = [
     {
-      type: "Feature",
+      type: 'Feature',
       geometry: {
-        type: "MultiPoint",
-        coordinates: []
-      }
-    }
+        type: 'MultiPoint',
+        coordinates: [],
+      },
+    },
   ];
-  _.each(viirs, e => {
+  _.each(viirs, (e) => {
     mp[0].geometry.coordinates.push(e.geometry.coordinates);
   });
   return mp;
@@ -208,14 +198,14 @@ function processViirsJSON(viirs12, viirs24, viirs48) {
 // update from upstream sources.
 function getFireGeoJSON() {
   return new Promise(function (resolve, reject) {
-    logger.info("[Fire data] Attempting to update cache from upstream data...");
+    logger.info('[Fire data] Attempting to update cache from upstream data...');
 
     // Grab both API requests asynchronously
     var urlList = [
       activeFirePerimetersUrl,
       activeFiresUrl,
       inactiveFirePerimetersUrl,
-      inactiveFiresUrl
+      inactiveFiresUrl,
     ];
     Promise.map(urlList, function (url) {
       return request
@@ -226,30 +216,30 @@ function getFireGeoJSON() {
             try {
               return [JSON.parse(body), url];
             } catch (err) {
-              reject(new Error("Could not parse upstream JSON"));
+              reject(new Error('Could not parse upstream JSON'));
             }
           } else {
-            logger.error("Got something other than HTTP 200", response);
+            logger.error('Got something other than HTTP 200', response);
             reject(
-              new Error("Upstream service status code: " + response.statusCode)
+              new Error('Upstream service status code: ' + response.statusCode)
             );
           }
         })
         .catch(function (err) {
           logger.error(
-            "Failed inside `request.getAsync(url).timeout().spread()` code segment"
+            'Failed inside `request.getAsync(url).timeout().spread()` code segment'
           );
           reject(err);
         });
     })
       .catch(function (err) {
-        logger.error("Failed inside `Promise.map()` code segment");
+        logger.error('Failed inside `Promise.map()` code segment');
         reject(err);
       })
       .then(function (results) {
         if (undefined !== results[0] && undefined !== results[1]) {
           logger.info(
-            "[Fire data] Upstream data fetched OK, processing and updating cache..."
+            '[Fire data] Upstream data fetched OK, processing and updating cache...'
           );
 
           // Each element in the `results` is a two-element array,
@@ -262,8 +252,8 @@ function getFireGeoJSON() {
           );
           writePersistentCache(
             {
-              type: "FeatureCollection",
-              features: fireGeoJSON
+              type: 'FeatureCollection',
+              features: fireGeoJSON,
             },
             fireFileCacheName
           );
@@ -271,7 +261,7 @@ function getFireGeoJSON() {
         }
       })
       .catch(function (err) {
-        logger.error("Could not parse GeoJSON from upstream server");
+        logger.error('Could not parse GeoJSON from upstream server');
         reject(err);
       });
   });
@@ -281,7 +271,7 @@ function getFireGeoJSON() {
 // which will be the last resort if the upstream isn't available.
 var writePersistentCache = function (currentGeoJSON, fileCacheName) {
   fs.writeFileSync(
-    PUBLIC_ROOT + "/" + fileCacheName,
+    PUBLIC_ROOT + '/' + fileCacheName,
     JSON.stringify(currentGeoJSON)
   );
 };
@@ -290,7 +280,7 @@ var writePersistentCache = function (currentGeoJSON, fileCacheName) {
 var serverPort = process.env.PORT || 3000;
 
 app.listen(serverPort, function () {
-  logger.info("Server running on", ":", serverPort);
+  logger.info('Server running on', ':', serverPort);
 });
 
 // Function that formats the update time into the desired format
@@ -411,7 +401,7 @@ function processGeoJSON(
       GENERALCAUSE: feature.properties.GENERALCAUSE,
       updated: feature.properties.updated,
       OUTDATE: feature.properties.OUTDATE,
-      discovered: feature.properties.discovered
+      discovered: feature.properties.discovered,
     };
 
     // This filters out null, NaN and "0" fire sizes.
